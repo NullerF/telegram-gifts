@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>TG Gifts Manager</title>
+    <style>
+        body { background: #0f0f0f; color: white; font-family: sans-serif; padding: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+        .card { background: #1c1c1e; border-radius: 15px; padding: 15px; border: 1px solid #333; text-align: center; }
+        .card img { width: 100%; border-radius: 10px; }
+        .price { color: #f4b400; font-weight: bold; margin-top: 10px; }
+
+        /* Админка */
+        #admin-panel { display: none; background: #252527; padding: 20px; border-radius: 15px; max-width: 400px; margin: 20px auto; border: 1px dashed #555; }
+        input { width: 100%; padding: 10px; margin: 5px 0; background: #333; border: 1px solid #444; color: white; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #0088cc; border: none; color: white; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .trigger { position: fixed; bottom: 0; right: 0; width: 40px; height: 40px; cursor: pointer; opacity: 0.05; }
+    </style>
+</head>
+<body>
+
+    <h1>Telegram Gifts Store</h1>
+    <div class="grid" id="container">Загрузка подарков...</div>
+
+    <div class="trigger" onclick="document.getElementById('admin-panel').style.toggleAttribute('open'); document.getElementById('admin-panel').style.display='block'"></div>
+
+    <div id="admin-panel">
+        <h3>Админ-панель (GitHub API)</h3>
+        <input type="password" id="gh-token" placeholder="GitHub Personal Access Token">
+        <input type="text" id="g-name" placeholder="Название подарка">
+        <input type="text" id="g-price" placeholder="Цена в Stars">
+        <input type="text" id="g-img" placeholder="URL картинки">
+        <input type="text" id="g-desc" placeholder="Описание">
+        <button onclick="addGift()">Добавить и обновить сайт</button>
+    </div>
+
+<script>
+    const GITHUB_USER = 'ТВОЙ_ЛОГИН';
+    const GITHUB_REPO = 'ТВОЙ_РЕПОЗИТОРИЙ';
+    const FILE_PATH = 'gifts.json';
+
+    // 1. Загрузка данных
+    async function loadGifts() {
+        const res = await fetch(`https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${FILE_PATH}?t=${Date.now()}`);
+        const gifts = await res.json();
+        document.getElementById('container').innerHTML = gifts.map(g => `
+            <div class="card">
+                <img src="${g.img}">
+                <h3>${g.name}</h3>
+                <p>${g.desc}</p>
+                <div class="price">⭐ ${g.price} Stars</div>
+            </div>
+        `).join('');
+        return gifts;
+    }
+
+    // 2. Добавление через GitHub API
+    async function addGift() {
+        const token = document.getElementById('gh-token').value;
+        const name = document.getElementById('g-name').value;
+        const price = document.getElementById('g-price').value;
+        const img = document.getElementById('g-img').value;
+        const desc = document.getElementById('g-desc').value;
+
+        if (!token) return alert('Нужен токен!');
+
+        // Получаем текущий файл, чтобы узнать его SHA (нужно для обновления)
+        const fileRes = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`);
+        const fileData = await fileRes.json();
+        const currentGifts = JSON.parse(atob(fileData.content));
+
+        // Добавляем новый подарок
+        currentGifts.push({ name, price, img, desc });
+
+        // Отправляем обратно в GitHub
+        const updateRes = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: "Добавлен новый подарок",
+                content: btoa(unescape(encodeURIComponent(JSON.stringify(currentGifts, null, 2)))),
+                sha: fileData.sha
+            })
+        });
+
+        if (updateRes.ok) {
+            alert('Готово! Сайт обновится через пару минут.');
+            location.reload();
+        } else {
+            alert('Ошибка API. Проверь токен.');
+        }
+    }
+
+    loadGifts();
+</script>
+</body>
+</html>
